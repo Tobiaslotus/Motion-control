@@ -1,0 +1,111 @@
+ import cv2
+import numpy as np
+
+# Initialize variables for tracking
+track_window = None
+roi_hist = None
+term_crit = None
+
+# Create a background subtraction object
+backSub = cv2.createBackgroundSubtractorMOG2()
+
+cap = cv2.VideoCapture(0) # Connect to the default camera
+
+# Variables for scrolling and tab switching
+scroll_speed = 10
+tab_switch_threshold = 100
+tab_switch_counter = 0
+
+while True:
+ret, frame = cap.read() # Read the frame from the camera
+
+if not ret:
+break
+
+# Apply background subtraction to obtain binary mask
+fgMask = backSub.apply(frame)
+
+# Apply morphological operations to remove noise
+kernel = np.ones((5, 5), np.uint8)
+fgMask = cv2.morphologyEx(fgMask, cv2.MORPH_OPEN, kernel)
+fgMask = cv2.morphologyEx(fgMask, cv2.MORPH_CLOSE, kernel)
+
+# Find contours in the binary mask
+contours, hierarchy = cv2.findContours(fgMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+# Iterate through the contours
+for contour in contours:
+# Calculate the bounding rectangle
+x, y, w, h = cv2.boundingRect(contour)
+
+# Draw the rectangle around the contour
+cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+# Calculate the centroid of the bounding rectangle
+cx = x + w // 2
+cy = y + h // 2
+
+# Perform actions based on the centroid position
+if cy < frame.shape[0] / 3: # Move up
+# Your code to move the virtual object up
+# Replace the placeholder comments with code to move the virtual object up
+print("Move up")
+# Simulate scrolling up
+scroll_speed = 10
+elif cy > frame.shape[0] * 2 / 3: # Move down
+# Your code to move the virtual object down
+# Replace the placeholder comments with code to move the virtual object down
+print("Move down")
+# Simulate scrolling down
+scroll_speed = -10
+else:
+# Reset scrolling
+scroll_speed = 0
+
+if cx > frame.shape[1] * 2 / 3: # Move right (switch tab)
+# Increase the tab switch counter
+tab_switch_counter += 1
+
+# If the counter exceeds the threshold, switch to the next tab
+if tab_switch_counter >= tab_switch_threshold:
+# Your code to switch to the next tab on the right
+# Replace the placeholder comment with code to switch tabs
+print("Switch to next tab")
+# Reset the tab switch counter
+tab_switch_counter = 0
+
+else:
+# Reset the tab switch counter if the hand moves left or center
+tab_switch_counter = 0
+
+# Set the tracking window and region of interest (ROI) for CAMShift
+track_window = (x, y, w, h)
+roi = frame[y:y + h, x:x + w]
+hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+mask = cv2.inRange(hsv_roi, np.array((0., 30., 32.)), np.array((180., 255., 255.)))
+roi_hist = cv2.calcHist([hsv_roi], [0], mask, [180], [0, 180])
+cv2.normalize(roi_hist, roi_hist, 0, 255, cv2.NORM_MINMAX)
+term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
+
+# If a hand is detected, apply CAMShift tracking
+if track_window is not None and roi_hist is not None and term_crit is not None:
+hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+dst = cv2.calcBackProject([hsv], [0], roi_hist, [0, 180], 1)
+
+# Apply meanshift to get the new location of the tracking window
+ret, track_window = cv2.meanShift(dst, track_window, term_crit)
+
+# Draw the new tracking window
+x, y, w, h = track_window
+cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+# Scroll by adjusting the Y position
+cv2.imshow("Frame", frame)
+
+# Exit the loop if 'q' is pressed
+if cv2.waitKey(1) & 0xFF == ord('q'):
+break
+
+# Release the capture and destroy all windows
+cap.release()
+cv2.destroyAllWindows()
